@@ -1,0 +1,47 @@
+# Deep learning and pipeline stack - part 03 onward. Python 3.12 only.
+# Install AFTER requirements.txt. CPU builds - no CUDA needed anywhere here.
+#
+# WINDOWS LONG-PATH WARNING
+# -------------------------
+# TensorFlow ships a deeply nested include/ tree. Its longest bundled header is
+# ~150 characters on its own, so if this repository sits more than ~110
+# characters deep, pip aborts mid-install with:
+#     OSError: [Errno 2] No such file or directory: '...client_side_weighted_round_robin.upb.h'
+# and leaves a BROKEN tensorflow package behind (import fails with
+# "No module named 'tensorflow.python'"). Delete site-packages/tensorflow if
+# that happens. Either enable Windows long paths (a registry change needing
+# admin), or clone somewhere short like C:\dev\machine-learning.
+#
+# Part 03 only needs the KERAS API, and Keras 3 is backend-agnostic, so
+# torch alone is enough for it. Parts 04 and 05 need all three backends.
+
+-r requirements.txt
+
+# Keras 3 - the API used throughout part 03. Backend-agnostic.
+keras>=3.5
+
+# PyTorch (CPU build). Also serves as the Keras backend when TF is unavailable.
+torch>=2.6,<3.0
+
+# TensorFlow - see the long-path warning above.
+tensorflow>=2.18,<3.0
+
+# JAX (CPU build) + optax for the optimiser - 04_frameworks/03_jax.
+# Flax is NOT listed: the JAX example uses raw JAX on purpose, and nothing
+# in this repository imports flax.
+jax>=0.11
+optax>=0.2.8
+
+# NOTE: gymnasium is deliberately NOT here. The reinforcement-learning
+# example writes its own tiny environment on purpose - an RL example whose
+# environment is a black box teaches nothing. Nothing in this repository
+# imports gymnasium.
+
+# Google Cloud - parts 05 (aiplatform, bigquery) and 06 (kfp)
+google-cloud-aiplatform>=1.70
+google-cloud-bigquery>=3.25
+kfp>=2.9
+
+# Part 06 - render_dag.py and pipeline.py read the compiled pipeline YAML.
+# kfp happens to pull this in, but the scripts import it directly.
+pyyaml>=6.0

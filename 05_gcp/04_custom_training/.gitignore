@@ -1,0 +1,2 @@
+# local run output - regenerate with: python trainer/task.py --epochs 3
+local_output/

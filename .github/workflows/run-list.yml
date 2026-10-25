@@ -1,0 +1,92 @@
+name: run-list
+
+# ===========================================================================
+# The fast job runs on every push and pull request to main. The full job runs
+# from the "Run workflow" button; uncomment `schedule` below to also run it
+# weekly. Some enterprise-managed accounts block GitHub-hosted runners - on
+# one of those, comment `push` and `pull_request` back out.
+# ===========================================================================
+on:
+  workflow_dispatch:          # "Run workflow" button - always available
+
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # schedule:
+  #   - cron: "0 6 * * 1"     # the heavy job, Mondays 06:00 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: run-list-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ----------------------------------------------------------------- fast
+  # Parts 00-02: the core stack only (numpy / pandas / scikit-learn /
+  # xgboost). No deep-learning frameworks, so the install is small.
+  # Measured locally: 17 scripts, ~4 minutes.
+  fast:
+    name: fast run-list (core stack, parts 00-02)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.12 on purpose: TensorFlow has no wheel above it, so the `full`
+          # job needs 3.12 and both jobs stay on one version.
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the core stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Environment check
+        run: python 00_setup/check_environment.py
+
+      - name: Run the fast run-list
+        run: bash .github/scripts/run_list.sh fast
+
+      - name: Check every relative markdown link resolves
+        run: python .github/scripts/check_links.py
+
+  # ----------------------------------------------------------------- full
+  # Everything: adds Keras, PyTorch, TensorFlow and JAX, which is a
+  # multi-gigabyte install, and the part-03 examples take 1-3 minutes each.
+  # Measured locally: 41 scripts, ~20 minutes, plus install time.
+  #
+  # Deliberately NOT on every push - it is five times slower than `fast` for
+  # little extra signal on a typical change.
+  full:
+    name: full run-list (all frameworks, parts 00-10)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the full stack
+        # requirements-dl.txt includes requirements.txt via -r.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dl.txt
+
+      - name: Environment check
+        run: python 00_setup/check_environment.py
+
+      - name: Run the full run-list
+        run: bash .github/scripts/run_list.sh full
+
+      - name: Check every relative markdown link resolves
+        run: python .github/scripts/check_links.py

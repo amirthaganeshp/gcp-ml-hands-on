@@ -1,0 +1,17 @@
+# Core stack - parts 01 and 02. Python 3.12.
+# Resolved and verified 2026-09-20.
+
+numpy==2.5.3
+pandas==3.0.6
+scipy==1.18.1
+scikit-learn==1.9.1
+matplotlib==3.11.2
+seaborn==0.13.2
+statsmodels==0.15.0
+xgboost==3.4.1
+requests==2.34.2
+
+# Makes Python use the OS certificate store. Only strictly needed behind a
+# corporate proxy that inspects TLS, where dataset downloads otherwise fail
+# with SSLError - but harmless everywhere, so it is installed by default.
+truststore==0.10.4

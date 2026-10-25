@@ -1,0 +1,20 @@
+# Docker does NOT read .gitignore. The build context is filtered by this file
+# alone, so anything listed in .gitignore is still uploaded to the daemon on
+# every build unless it is repeated here.
+#
+# Without this file the context carries local_output/model.keras (~1.3 MB) and
+# submit.py, neither of which the Dockerfile ever COPYs. They would not reach
+# the image - but they are still sent, hashed, and counted against the cache
+# key, which is why a build can be slow for no visible reason.
+
+# Local training output - regenerate with: python trainer/task.py --epochs 3
+local_output/
+
+# Submission helper. Runs on your machine to CREATE the Vertex job; it has no
+# business inside the training container.
+submit.py
+
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

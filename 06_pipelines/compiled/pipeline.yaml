@@ -1,0 +1,532 @@
+# PIPELINE DEFINITION
+# Name: train-and-conditionally-deploy
+# Description: Ingest, validate, train, and deploy only if the model clears an accuracy threshold.
+# Inputs:
+#    accuracy_threshold: float [Default: 0.85]
+#    n_estimators: int [Default: 100.0]
+#    row_limit: int [Default: 2000.0]
+components:
+  comp-alert:
+    executorLabel: exec-alert
+    inputDefinitions:
+      parameters:
+        accuracy:
+          parameterType: NUMBER_DOUBLE
+        reason:
+          parameterType: STRING
+  comp-condition-1:
+    dag:
+      tasks:
+        condition-branches-2:
+          componentRef:
+            name: comp-condition-branches-2
+          dependentTasks:
+          - train
+          inputs:
+            artifacts:
+              pipelinechannel--train-model:
+                taskOutputArtifact:
+                  outputArtifactKey: model
+                  producerTask: train
+            parameters:
+              pipelinechannel--accuracy_threshold:
+                componentInputParameter: pipelinechannel--accuracy_threshold
+              pipelinechannel--train-Output:
+                taskOutputParameter:
+                  outputParameterKey: Output
+                  producerTask: train
+              pipelinechannel--validate-Output:
+                componentInputParameter: pipelinechannel--validate-Output
+          taskInfo:
+            name: condition-branches-2
+        train:
+          cachingOptions:
+            enableCache: true
+          componentRef:
+            name: comp-train
+          inputs:
+            artifacts:
+              input_data:
+                componentInputArtifact: pipelinechannel--ingest-output_data
+            parameters:
+              n_estimators:
+                componentInputParameter: pipelinechannel--n_estimators
+          retryPolicy:
+            backoffDuration: 60s
+            backoffFactor: 2.0
+            backoffMaxDuration: 3600s
+            maxRetryCount: 2
+          taskInfo:
+            name: Train model
+    inputDefinitions:
+      artifacts:
+        pipelinechannel--ingest-output_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        pipelinechannel--accuracy_threshold:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--n_estimators:
+          parameterType: NUMBER_INTEGER
+        pipelinechannel--validate-Output:
+          parameterType: BOOLEAN
+  comp-condition-3:
+    dag:
+      tasks:
+        deploy:
+          cachingOptions:
+            enableCache: true
+          componentRef:
+            name: comp-deploy
+          inputs:
+            artifacts:
+              model:
+                componentInputArtifact: pipelinechannel--train-model
+            parameters:
+              accuracy:
+                componentInputParameter: pipelinechannel--train-Output
+          taskInfo:
+            name: Deploy to endpoint
+    inputDefinitions:
+      artifacts:
+        pipelinechannel--train-model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        pipelinechannel--accuracy_threshold:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--train-Output:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--validate-Output:
+          parameterType: BOOLEAN
+  comp-condition-4:
+    dag:
+      tasks:
+        alert:
+          cachingOptions:
+            enableCache: true
+          componentRef:
+            name: comp-alert
+          inputs:
+            parameters:
+              accuracy:
+                componentInputParameter: pipelinechannel--train-Output
+              reason:
+                runtimeValue:
+                  constant: accuracy below threshold
+          taskInfo:
+            name: Block deploy
+    inputDefinitions:
+      parameters:
+        pipelinechannel--accuracy_threshold:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--train-Output:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--validate-Output:
+          parameterType: BOOLEAN
+  comp-condition-branches-2:
+    dag:
+      tasks:
+        condition-3:
+          componentRef:
+            name: comp-condition-3
+          inputs:
+            artifacts:
+              pipelinechannel--train-model:
+                componentInputArtifact: pipelinechannel--train-model
+            parameters:
+              pipelinechannel--accuracy_threshold:
+                componentInputParameter: pipelinechannel--accuracy_threshold
+              pipelinechannel--train-Output:
+                componentInputParameter: pipelinechannel--train-Output
+              pipelinechannel--validate-Output:
+                componentInputParameter: pipelinechannel--validate-Output
+          taskInfo:
+            name: model-is-good-enough
+          triggerPolicy:
+            condition: inputs.parameter_values['pipelinechannel--train-Output'] >=
+              inputs.parameter_values['pipelinechannel--accuracy_threshold']
+        condition-4:
+          componentRef:
+            name: comp-condition-4
+          inputs:
+            parameters:
+              pipelinechannel--accuracy_threshold:
+                componentInputParameter: pipelinechannel--accuracy_threshold
+              pipelinechannel--train-Output:
+                componentInputParameter: pipelinechannel--train-Output
+              pipelinechannel--validate-Output:
+                componentInputParameter: pipelinechannel--validate-Output
+          taskInfo:
+            name: model-failed-the-gate
+          triggerPolicy:
+            condition: '!(inputs.parameter_values[''pipelinechannel--train-Output'']
+              >= inputs.parameter_values[''pipelinechannel--accuracy_threshold''])'
+    inputDefinitions:
+      artifacts:
+        pipelinechannel--train-model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        pipelinechannel--accuracy_threshold:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--train-Output:
+          parameterType: NUMBER_DOUBLE
+        pipelinechannel--validate-Output:
+          parameterType: BOOLEAN
+  comp-deploy:
+    executorLabel: exec-deploy
+    inputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        accuracy:
+          parameterType: NUMBER_DOUBLE
+    outputDefinitions:
+      artifacts:
+        endpoint:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+  comp-ingest:
+    executorLabel: exec-ingest
+    inputDefinitions:
+      parameters:
+        row_limit:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        output_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train:
+    executorLabel: exec-train
+    inputDefinitions:
+      artifacts:
+        input_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        n_estimators:
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        metrics:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        Output:
+          parameterType: NUMBER_DOUBLE
+  comp-validate:
+    executorLabel: exec-validate
+    inputDefinitions:
+      artifacts:
+        input_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        report:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+      parameters:
+        Output:
+          parameterType: BOOLEAN
+defaultPipelineRoot: gs://your-bucket/pipeline-root
+deploymentSpec:
+  executors:
+    exec-alert:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - alert
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef alert(reason: str, accuracy: float) -> None:\n    \"\"\"The other\
+          \ branch. A pipeline that silently does nothing when the\n    model is bad\
+          \ is worse than one that fails loudly.\n    \"\"\"\n    print(f\"BLOCKED:\
+          \ {reason} (accuracy {accuracy:.4f})\")\n\n"
+        image: python:3.12-slim
+    exec-deploy:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - deploy
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef deploy(model: Input[Model], accuracy: float,\n           endpoint:\
+          \ Output[Model]) -> None:\n    \"\"\"The step the gate protects.\n\n   \
+          \ Deliberately a stub. Uploading to the Vertex AI Model Registry and\n \
+          \   deploying to an endpoint is a real call, and this repository does not\n\
+          \    make real calls - see the README. What matters structurally is that\n\
+          \    this component only ever runs inside the dsl.If below.\n    \"\"\"\n\
+          \    print(f\"Would upload model from {model.path} to the Model Registry\"\
+          )\n    print(f\"Would deploy to an endpoint - accuracy {accuracy:.4f}\"\
+          )\n    endpoint.metadata[\"deployed\"] = True\n    endpoint.metadata[\"\
+          accuracy\"] = accuracy\n\n"
+        image: python:3.12-slim
+    exec-ingest:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - ingest
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef ingest(row_limit: int, output_data: Output[Dataset]) -> None:\n\
+          \    \"\"\"Every component runs in its own container.\n\n    Three things\
+          \ make this a component rather than a function:\n\n      - the decorator,\
+          \ which says how to containerise it\n      - packages_to_install, resolved\
+          \ at RUNTIME inside that container. The\n        function body cannot see\
+          \ anything imported at module level in this\n        file, which is why\
+          \ the imports are inside.\n      - typed inputs and outputs. Output[Dataset]\
+          \ is an ARTIFACT: KFP\n        allocates a path, passes it in, and tracks\
+          \ whatever is written\n        there in the metadata store.\n    \"\"\"\n\
+          \    import csv\n    import random\n\n    random.seed(42)\n    with open(output_data.path,\
+          \ \"w\", newline=\"\") as f:\n        w = csv.writer(f)\n        w.writerow([\"\
+          feature_a\", \"feature_b\", \"label\"])\n        for _ in range(row_limit):\n\
+          \            a = random.gauss(0, 1)\n            b = random.gauss(0, 1)\n\
+          \            w.writerow([a, b, int(a + b > 0)])\n\n    # Metadata travels\
+          \ with the artifact and shows up in the run graph.\n    output_data.metadata[\"\
+          rows\"] = row_limit\n    output_data.metadata[\"source\"] = \"synthetic\"\
+          \n\n"
+        image: python:3.12-slim
+    exec-train:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'scikit-learn==1.6.1'  &&  python3 -m pip install --quiet --no-warn-script-location\
+          \ 'kfp==2.17.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"\
+          3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train(input_data: Input[Dataset], n_estimators: int,\n      \
+          \    model: Output[Model], metrics: Output[Metrics]) -> float:\n    \"\"\
+          \"Train, evaluate, and return the metric the gate will read.\"\"\"\n   \
+          \ import pickle\n\n    import pandas as pd\n    from sklearn.ensemble import\
+          \ RandomForestClassifier\n    from sklearn.metrics import accuracy_score,\
+          \ roc_auc_score\n    from sklearn.model_selection import train_test_split\n\
+          \n    df = pd.read_csv(input_data.path)\n    X = df[[\"feature_a\", \"feature_b\"\
+          ]]\n    y = df[\"label\"]\n    X_tr, X_te, y_tr, y_te = train_test_split(\n\
+          \        X, y, test_size=0.25, random_state=42, stratify=y)\n\n    clf =\
+          \ RandomForestClassifier(n_estimators=n_estimators, random_state=42)\n \
+          \   clf.fit(X_tr, y_tr)\n\n    proba = clf.predict_proba(X_te)[:, 1]\n \
+          \   acc = float(accuracy_score(y_te, proba > 0.5))\n    auc = float(roc_auc_score(y_te,\
+          \ proba))\n\n    metrics.log_metric(\"accuracy\", acc)\n    metrics.log_metric(\"\
+          roc_auc\", auc)\n    metrics.log_metric(\"n_estimators\", n_estimators)\n\
+          \n    with open(model.path, \"wb\") as f:\n        pickle.dump(clf, f)\n\
+          \    model.metadata[\"framework\"] = \"scikit-learn\"\n    model.metadata[\"\
+          accuracy\"] = acc\n\n    return acc\n\n"
+        image: python:3.12-slim
+        resources:
+          cpuLimit: 2.0
+          memoryLimit: 4.0
+          resourceCpuLimit: '2'
+          resourceMemoryLimit: 4G
+    exec-validate:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - validate
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'scikit-learn==1.6.1'  &&  python3 -m pip install --quiet --no-warn-script-location\
+          \ 'kfp==2.17.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"\
+          3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef validate(input_data: Input[Dataset], report: Output[Metrics])\
+          \ -> bool:\n    \"\"\"Validate BEFORE training, and return a decision.\n\
+          \n    This component returns a bool, which is a PARAMETER rather than an\n\
+          \    artifact - small values passed by value. Parameters can be used in\n\
+          \    control flow; artifact CONTENTS cannot, because the orchestrator never\n\
+          \    opens them.\n    \"\"\"\n    import pandas as pd\n\n    df = pd.read_csv(input_data.path)\n\
+          \    n_rows = len(df)\n    n_null = int(df.isna().sum().sum())\n    balance\
+          \ = float(df[\"label\"].mean())\n\n    report.log_metric(\"rows\", n_rows)\n\
+          \    report.log_metric(\"nulls\", n_null)\n    report.log_metric(\"class_balance\"\
+          , balance)\n\n    # The checks worth making are the ones that caused real\
+          \ failures\n    # earlier in this repository: too little data, nulls silently\
+          \ imputed\n    # downstream, and a class balance that makes accuracy meaningless.\n\
+          \    ok = n_rows >= 100 and n_null == 0 and 0.2 <= balance <= 0.8\n    report.log_metric(\"\
+          passed\", int(ok))\n    return ok\n\n"
+        image: python:3.12-slim
+pipelineInfo:
+  description: Ingest, validate, train, and deploy only if the model clears an accuracy
+    threshold.
+  name: train-and-conditionally-deploy
+root:
+  dag:
+    tasks:
+      condition-1:
+        componentRef:
+          name: comp-condition-1
+        dependentTasks:
+        - ingest
+        - validate
+        inputs:
+          artifacts:
+            pipelinechannel--ingest-output_data:
+              taskOutputArtifact:
+                outputArtifactKey: output_data
+                producerTask: ingest
+          parameters:
+            pipelinechannel--accuracy_threshold:
+              componentInputParameter: accuracy_threshold
+            pipelinechannel--n_estimators:
+              componentInputParameter: n_estimators
+            pipelinechannel--validate-Output:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: validate
+        taskInfo:
+          name: data-is-valid
+        triggerPolicy:
+          condition: inputs.parameter_values['pipelinechannel--validate-Output'] ==
+            true
+      ingest:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-ingest
+        inputs:
+          parameters:
+            row_limit:
+              componentInputParameter: row_limit
+        taskInfo:
+          name: Ingest data
+      validate:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-validate
+        dependentTasks:
+        - ingest
+        inputs:
+          artifacts:
+            input_data:
+              taskOutputArtifact:
+                outputArtifactKey: output_data
+                producerTask: ingest
+        taskInfo:
+          name: Validate data
+  inputDefinitions:
+    parameters:
+      accuracy_threshold:
+        defaultValue: 0.85
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      n_estimators:
+        defaultValue: 100.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      row_limit:
+        defaultValue: 2000.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.17.0

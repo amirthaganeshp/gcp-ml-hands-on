@@ -1,0 +1,71 @@
+MIT License
+
+Copyright (c) 2026 Amirtha Ganesh Pugazhendhi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+ON DATA
+
+Code in this repository is MIT licensed. The datasets it downloads are not:
+each retains its original licence and terms. See 00_setup/README.md for the
+source and licence of every dataset - Iris and Flights (public domain),
+Penguins (CC0), the UCI sets including Adult, Wine Quality, Bike Sharing,
+Banknote, Seeds, Rice and Auto MPG (CC BY 4.0), MovieLens 100K (GroupLens
+research terms), and MNIST and Fashion-MNIST (open, via Keras).
+
+NOTE IN PARTICULAR THAT MOVIELENS 100K MAY NOT BE REDISTRIBUTED, which is
+why it is downloaded rather than committed. No dataset is vendored in this
+repository; every one is fetched from its publisher at run time.
+
+Penguins and Flights are fetched through the seaborn-data mirror
+(github.com/mwaskom/seaborn-data), which repackages them; their original
+licences are the ones above.
+
+ON PYTHON PACKAGES
+
+Installed by pip, not vendored here. Each keeps its own licence.
+
+  requirements.txt      the core stack
+    numpy, pandas, scipy, scikit-learn, seaborn, statsmodels  BSD 3-Clause
+    matplotlib                        Matplotlib licence (BSD-compatible)
+    xgboost, requests                 Apache License 2.0
+    truststore                        MIT
+
+  requirements-dl.txt   the deep-learning and Google Cloud additions
+    keras, tensorflow                 Apache License 2.0
+    torch                             BSD 3-Clause
+    google-cloud-aiplatform           Apache License 2.0
+    google-cloud-bigquery             Apache License 2.0
+    kfp (Kubeflow Pipelines SDK)      Apache License 2.0
+
+ON GOOGLE CLOUD
+
+No script in this repository calls a Google Cloud API or invokes `gcloud`.
+The Vertex AI, BigQuery and Kubeflow material in 05_gcp is documented, and
+the client libraries above are listed because they are installed, not
+because anything here authenticates. Running any of it against a project of
+your own is your business, under Google's terms, not this repository's.
+
+ON WHAT THE NUMBERS ARE WORTH
+
+Accuracies, runtimes and costs quoted in the READMEs were measured on one
+laptop against the datasets named above, and are stated as such. They will
+differ on yours. Nothing here is a benchmark.
